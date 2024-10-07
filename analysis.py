@@ -1,28 +1,22 @@
-# Let's start by defining the necessary imports and functions to process the transaction data and compute the portfolio value and gain.
-
 import json
 from datetime import datetime, timedelta
 
-# Import numpy_financial for XIRR calculation
-import numpy_financial as npf
-
-# Let's implement XIRR calculation manually using a common XIRR formula approximation
-# We can use the scipy library to optimize and calculate the XIRR
+# uses the scipy library to calculate the XIRR
 from scipy.optimize import newton
 
-# Load the transaction JSON file (replace the file path with the actual path to the JSON file)
+# Load the transaction JSON file
 file_path = 'transaction_detail.json'
 
 with open(file_path, 'r') as f:
     data = json.load(f)
 
 
-# Function to get today's date and use it for NAV calculation
+# To get todays date and use it for NAV calculation
 def get_today():
     return datetime.now().strftime('%d-%b-%Y')
 
 
-# Helper function to parse transaction data and calculate units based on FIFO
+# To parse transaction data and calculate units based on FIFO
 def process_transactions(transactions):
     holdings = {}
 
@@ -39,7 +33,7 @@ def process_transactions(transactions):
         if key not in holdings:
             holdings[key] = {'units': 0, 'transactions': []}
 
-        # FIFO logic: If positive, it's a purchase, if negative, it's a sale
+        # FIFO logic: If positive = a purchase, if negative = a sale
         if units > 0:
             holdings[key]['transactions'].append({
                 'units': units,
@@ -49,7 +43,6 @@ def process_transactions(transactions):
             })
             holdings[key]['units'] += units
         else:
-            # If it's a sale, apply FIFO and reduce units accordingly
             remaining_sale_units = abs(units)
             while remaining_sale_units > 0 and holdings[key]['transactions']:
                 first_purchase = holdings[key]['transactions'][0]
@@ -59,12 +52,12 @@ def process_transactions(transactions):
                 else:
                     first_purchase['units'] -= remaining_sale_units
                     remaining_sale_units = 0
-            holdings[key]['units'] += units  # Reduce the overall units
+            holdings[key]['units'] += units
 
     return holdings
 
 
-# Function to calculate total portfolio value based on the latest NAV
+# To calculate total portfolio value based on the latest NAV
 def calculate_portfolio_value(holdings, dt_summary):
     total_value = 0
     for scheme, folio_data in holdings.items():
@@ -78,9 +71,10 @@ def calculate_portfolio_value(holdings, dt_summary):
     return total_value
 
 
-# Function to calculate portfolio gain
+# To calculate portfolio gain
 def calculate_portfolio_gain(holdings, dt_summary):
     total_gain = 0
+    print("Net Units and Value for Each Fund:")
     for scheme, folio_data in holdings.items():
         scheme_code = scheme[0]
         acquisition_cost = 0
@@ -90,32 +84,16 @@ def calculate_portfolio_gain(holdings, dt_summary):
                 current_value = folio_data['units'] * nav
                 acquisition_cost = sum([trxn['price'] * trxn['units'] for trxn in folio_data['transactions']])
                 total_gain += (current_value - acquisition_cost)
+
+                print(f"Scheme: {summary['schemeName']}")
+                print(f" - Remaining Units: {folio_data['units']:.3f}")
+                print(f" - Net Value as of Today: ₹{current_value:.2f}\n")
+
                 break
     return total_gain
 
-''''
-# Function to calculate XIRR (optional)
-def calculate_xirr(holdings):
-    cashflows = []
-    for scheme, folio_data in holdings.items():
-        for trxn in folio_data['transactions']:
-            cashflows.append({'date': datetime.strptime(trxn['date'], '%d-%b-%Y'), 'amount': -trxn['amount']})
 
-    # Add final portfolio value as a positive cashflow on today's date
-    cashflows.append({'date': datetime.now(), 'amount': total_portfolio_value})
-
-    # Prepare the amounts and dates for XIRR calculation
-    amounts = [cf['amount'] for cf in cashflows]
-    dates = [cf['date'] for cf in cashflows]
-
-    # Calculate XIRR using numpy_financial
-    xirr = npf.xirr(amounts, dates)
-
-    return xirr
-'''
-
-
-# Helper function to calculate XIRR manually
+# To calculate XIRR
 def xirr(cashflows):
     def npv(rate):
         total = 0.0
@@ -127,17 +105,15 @@ def xirr(cashflows):
     return newton(npv, 0.1)
 
 
-# Update the XIRR calculation function using scipy's newton method
+# Update the XIRR calculation using scipy's newton method
 def calculate_xirr(holdings, total_portfolio_value):
     cashflows = []
     for scheme, folio_data in holdings.items():
         for trxn in folio_data['transactions']:
             cashflows.append({'date': datetime.strptime(trxn['date'], '%d-%b-%Y'), 'amount': -trxn['amount']})
 
-    # Add final portfolio value as a positive cashflow on today's date
     cashflows.append({'date': datetime.now(), 'amount': total_portfolio_value})
 
-    # Calculate XIRR using scipy's newton method
     xirr_value = xirr(cashflows)
 
     return xirr_value
@@ -151,12 +127,9 @@ dt_summary = data['data'][0]['dtSummary']
 holdings = process_transactions(dt_transaction)
 total_portfolio_value = calculate_portfolio_value(holdings, dt_summary)
 total_portfolio_gain = calculate_portfolio_gain(holdings, dt_summary)
-#xirr = calculate_xirr(holdings)
-
-# Recalculate with the updated XIRR function
 xirr_value = calculate_xirr(holdings, total_portfolio_value)
 
-# Print results
+# Print total portfolio value, gain, and XIRR
 print(f"Total Portfolio Value: ₹{total_portfolio_value:.2f}")
 print(f"Total Portfolio Gain: ₹{total_portfolio_gain:.2f}")
 print(f"XIRR: {xirr_value:.2%}")
